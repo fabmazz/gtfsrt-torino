@@ -1,10 +1,12 @@
 import sys
+import json
+import time
 import urllib.request
 import gtfs_realtime_pb2
 import protobuf_json
-import json
 
 URL =  "http://percorsieorari.gtt.to.it/das_gtfsrt/vehicle_position.aspx"
+
 
 def get_updates():
     gtfs_realtime = gtfs_realtime_pb2.FeedMessage()
@@ -15,6 +17,12 @@ def get_updates():
     data = protobuf_json.pb2json(gtfs_realtime)
     return data
 
+def check_update(up):
+    mid = up["id"]
+    in_id = up["vehicle"]["vehicle"]["id"]
+    return mid == in_id
+
+
 def main(argv):
 
     data = get_updates()
@@ -24,11 +32,15 @@ def main(argv):
                 news = up["vehicle"]
                 print(news["timestamp"], news["vehicle"]["label"],
                     news["trip"]["route_id"])
-        elif argv[1] == "print":
-            for up in data["entity"]:
-                news = up["vehicle"]
-                print(news["vehicle"]["label"])
                 print("\t", up.keys())
+
+        elif argv[1] == "checkid":
+            all_good = True
+            for up in data["entity"]:
+                all_good = all_good and check_update(up)
+            print("IDs are the same field: ", all_good)
+
+
     else:
         print(json.dumps(data, indent=3))
     return
