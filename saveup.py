@@ -1,9 +1,11 @@
 import sys
-import gtt_updates
 import time
 import json
+from pathlib import Path
+import gtt_updates
+import io_lib
 
-BASE_NAME_OUT = "updates_{}.json.csv"
+BASE_NAME_OUT = "updates_{}.json.gz"
 
 class Update:
     """
@@ -26,30 +28,33 @@ class Update:
     def __str__(self):
         return f"ts: {self.timest}, veh: {self.veh_num}, route: {self.route}"
 
-def get_all_updates():
+def get_parse_updates():
     data = gtt_updates.get_updates()
     print(data.keys())
-    all_up = [Update(d) for d in data["entity"]]
 
-    return all_up
+    return (Update(d) for d in data["entity"])
 
 def main(argv):
 
-    starttime = time.time()
-    r = get_all_updates()
+    starttime = int(time.time())
+    r = get_parse_updates()
 
-    v = set(r)
-    print(len(v))
-    time.sleep(2)
-    n = set(get_all_updates())
+    fin_updates = set(r)
+    count = 1
+    outname = Path(BASE_NAME_OUT.format(starttime))
+    while True:
+        print(len(fin_updates))
+        time.sleep(2)
+    #n = set(get_all_updates())
 
-    v.update(n)
+        fin_updates = fin_updates.union(get_parse_updates())
+        count += 1
+        if count % 3 == 0:
+            print("Saving..")
+            gen = sorted(fin_updates, key=lambda x: x.timest)
 
-    print(len(v))
-    with open(sys.argv[1], "w") as f:
-        d= [l.data for l in v]
-        json.dump(d, f, indent=3)
-
-    print([hash(l) for l in v])
+            io_lib.save_json_gzip(outname, [x.data for x in gen])
+    
+    #print([hash(l) for l in v])
 if __name__ == '__main__':
     main(sys.argv)
