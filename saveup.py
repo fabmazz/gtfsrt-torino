@@ -6,6 +6,7 @@ import gtt_updates
 import io_lib
 
 BASE_NAME_OUT = "updates_{}.json.gz"
+TIME_SLEEP = 3
 
 class Update:
     """
@@ -34,6 +35,12 @@ def get_parse_updates():
 
     return (Update(d) for d in data["entity"])
 
+def save_ups(fin_set, outname):
+    print("Saving..")
+    gen = sorted(fin_set, key=lambda x: x.timest)
+
+    io_lib.save_json_gzip(outname, [x.data for x in gen])
+
 def main(argv):
 
     starttime = int(time.time())
@@ -42,19 +49,19 @@ def main(argv):
     fin_updates = set(r)
     count = 1
     outname = Path(BASE_NAME_OUT.format(starttime))
-    while True:
-        print(len(fin_updates))
-        time.sleep(2)
-    #n = set(get_all_updates())
+    try:
+        while True:
+            print(len(fin_updates))
+            time.sleep(TIME_SLEEP)
+        #n = set(get_all_updates())
 
-        fin_updates = fin_updates.union(get_parse_updates())
-        count += 1
-        if count % 3 == 0:
-            print("Saving..")
-            gen = sorted(fin_updates, key=lambda x: x.timest)
-
-            io_lib.save_json_gzip(outname, [x.data for x in gen])
-    
+            fin_updates = fin_updates.union(set(get_parse_updates()))
+            count += 1
+            if count % 8 == 0:
+                save_ups(fin_updates, outname)
+    except KeyboardInterrupt:
+        print("Caught KeyboardInterrupt")
+        save_ups(fin_updates, outname)
     #print([hash(l) for l in v])
 if __name__ == '__main__':
     main(sys.argv)
