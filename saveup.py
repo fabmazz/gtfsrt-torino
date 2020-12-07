@@ -1,12 +1,13 @@
 import sys
 import time
-import json
+import datetime
 from pathlib import Path
 import gtt_updates
 import io_lib
 
 BASE_NAME_OUT = "updates_{}.json.gz"
 TIME_SLEEP = 3
+HOUR_CUT=16
 
 class Update:
     """
@@ -35,6 +36,13 @@ def get_parse_updates():
 
     return (Update(d) for d in data["entity"])
 
+def get_cut_date(next_day=False):
+    now = datetime.datetime.now()
+    if next_day:
+        now += datetime.timedelta(days=1.)
+    defin = datetime.datetime(now.year, now.month, now.day , HOUR_CUT)
+    return defin
+
 def save_ups(fin_set, outname):
     print("Saving..")
     gen = sorted(fin_set, key=lambda x: x.timest)
@@ -44,11 +52,16 @@ def save_ups(fin_set, outname):
 def main(argv):
 
     starttime = int(time.time())
+    ts_cut = get_cut_date().timestamp()
+    if ts_cut < starttime:
+        ts_cut = get_cut_date(next_day=True).timestamp()
+        print("Update changing date")
     r = get_parse_updates()
 
     fin_updates = set(r)
     count = 1
     outname = Path(BASE_NAME_OUT.format(starttime))
+     
     try:
         while True:
             print(len(fin_updates))
@@ -56,9 +69,17 @@ def main(argv):
         #n = set(get_all_updates())
 
             fin_updates = fin_updates.union(set(get_parse_updates()))
+            mtimestamp = int(time.time())
             count += 1
-            if count % 8 == 0:
+            if count % 8 == 0 or mtimestamp > ts_cut:
                 save_ups(fin_updates, outname)
+            if mtimestamp > ts_cut:
+                ### UPDATE HOUR TO SAVE
+                print("Updating saving date")
+                assert get_cut_date().timestamp() < mtimestamp
+                ts_cut = get_cut_date(next_day=True).timestamp()
+                outname = Path(BASE_NAME_OUT.format(mtimestamp))
+                fin_updates = set()
     except KeyboardInterrupt:
         print("Caught KeyboardInterrupt")
         save_ups(fin_updates, outname)
