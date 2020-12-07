@@ -7,7 +7,7 @@ import io_lib
 
 BASE_NAME_OUT = "updates_{}.json.gz"
 TIME_SLEEP = 3
-HOUR_CUT=16
+HOUR_CUT=4
 
 class Update:
     """
@@ -32,7 +32,9 @@ class Update:
 
 def get_parse_updates():
     data = gtt_updates.get_updates()
-    print(data.keys())
+    keys = data.keys()
+    if len(keys)>2 or "header" not in keys or "entity" not in keys:
+        print(keys)
 
     return (Update(d) for d in data["entity"])
 
@@ -61,23 +63,27 @@ def main(argv):
     fin_updates = set(r)
     count = 1
     outname = Path(BASE_NAME_OUT.format(starttime))
-     
+    mtimestamp = int(time.time())
     try:
         while True:
-            print(len(fin_updates))
+        
+            print(mtimestamp, "\t", len(fin_updates))
+
             time.sleep(TIME_SLEEP)
         #n = set(get_all_updates())
 
             fin_updates = fin_updates.union(set(get_parse_updates()))
             mtimestamp = int(time.time())
             count += 1
-            if count % 8 == 0 or mtimestamp > ts_cut:
+            save_too_many = mtimestamp > ts_cut or len(fin_updates) > 150000
+            if count % 10 == 0 or save_too_many:
                 save_ups(fin_updates, outname)
-            if mtimestamp > ts_cut:
+            if save_too_many:
                 ### UPDATE HOUR TO SAVE
                 print("Updating saving date")
-                assert get_cut_date().timestamp() < mtimestamp
-                ts_cut = get_cut_date(next_day=True).timestamp()
+                if mtimestamp > ts_cut:
+                    assert get_cut_date().timestamp() < mtimestamp
+                    ts_cut = get_cut_date(next_day=True).timestamp()
                 outname = Path(BASE_NAME_OUT.format(mtimestamp))
                 fin_updates = set()
     except KeyboardInterrupt:
