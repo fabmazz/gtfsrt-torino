@@ -43,6 +43,10 @@ def get_parse_updates():
     keys = data.keys()
     if len(keys)>2 or "header" not in keys or "entity" not in keys:
         print(keys)
+    
+    if "entity" not in keys:
+        print("NO PAYLOAD")
+        return tuple()
 
     return (Update(d) for d in data["entity"])
 
