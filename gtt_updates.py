@@ -1,18 +1,23 @@
 import sys
 import json
 import time
-import urllib.request
-import gtfs_realtime_pb2
+import requests
 import protobuf_json
+
+import gtfs_realtime_pb2
 
 URL =  "http://percorsieorari.gtt.to.it/das_gtfsrt/vehicle_position.aspx"
 
 
-def get_updates():
+def get_updates(session=None):
     gtfs_realtime = gtfs_realtime_pb2.FeedMessage()
-    req = urllib.request.urlopen(URL)
-    data = req.read()
-    gtfs_realtime.ParseFromString(data)
+    if session is not None:
+        c = session.get(URL)
+    else:
+        c = requests.get(URL)
+    #req = urllib.request.urlopen(URL)
+    #data = req.read()
+    gtfs_realtime.ParseFromString(c.content)
 
     data = protobuf_json.pb2json(gtfs_realtime)
     return data
