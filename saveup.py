@@ -4,12 +4,15 @@ import datetime
 import urllib.error
 import http.client
 from pathlib import Path
+import requests
 import gtt_updates
 import io_lib
+
 
 BASE_NAME_OUT = "updates_{}.json.gz"
 TIME_SLEEP = 3
 HOUR_CUT=4
+MAX_UPDATES=200_000
 
 class Update:
     """
@@ -32,16 +35,17 @@ class Update:
     def __str__(self):
         return f"ts: {self.timest}, veh: {self.veh_num}, route: {self.route}"
 
-def get_parse_updates():
+def get_parse_updates(session=None):
     gotit = False
     while not gotit:
         try:
-            data = gtt_updates.get_updates()
+            data = gtt_updates.get_updates(session=session)
             gotit = True
         except urllib.error.HTTPError as e:
             print("Got "+e.msg+" , Retrying")
         except http.client.RemoteDisconnected as e:
             print("Remote disconnected, Retrying")
+
     keys = data.keys()
     if len(keys)>2 or "header" not in keys or "entity" not in keys:
         print(keys)
@@ -67,6 +71,7 @@ def save_ups(fin_set, outname):
 
 def main(argv):
 
+    m_session = requests.Session()
     starttime = int(time.time())
     ts_cut = get_cut_date().timestamp()
     if ts_cut < starttime:
@@ -86,10 +91,10 @@ def main(argv):
             time.sleep(TIME_SLEEP)
         #n = set(get_all_updates())
 
-            fin_updates = fin_updates.union(set(get_parse_updates()))
+            fin_updates = fin_updates.union(set(get_parse_updates(m_session)))
             mtimestamp = int(time.time())
             count += 1
-            save_too_many = mtimestamp > ts_cut or len(fin_updates) > 150000
+            save_too_many = mtimestamp > ts_cut or len(fin_updates) > MAX_UPDATES
             if count % 10 == 0 or save_too_many:
                 save_ups(fin_updates, outname)
             if save_too_many:
