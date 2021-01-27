@@ -10,6 +10,7 @@ import io_lib
 
 
 BASE_NAME_OUT = "updates_{}.json.gz"
+OUT_FOLDER="data"
 TIME_SLEEP = 3
 HOUR_CUT=4
 MAX_UPDATES=200_000
@@ -81,7 +82,11 @@ def main(argv):
 
     fin_updates = set(r)
     count = 1
-    outname = Path(BASE_NAME_OUT.format(starttime))
+    outfold = Path(OUT_FOLDER)
+    if not outfold.exists():
+        outfold.mkdir(parents=True)
+     
+    outname = outfold / Path(BASE_NAME_OUT.format(starttime))
     mtimestamp = int(time.time())
     try:
         while True:
@@ -103,7 +108,8 @@ def main(argv):
                 if mtimestamp > ts_cut:
                     assert get_cut_date().timestamp() < mtimestamp
                     ts_cut = get_cut_date(next_day=True).timestamp()
-                outname = Path(BASE_NAME_OUT.format(mtimestamp))
+                
+                outname = outfold / Path(BASE_NAME_OUT.format(mtimestamp))
                 fin_updates = set()
     except KeyboardInterrupt:
         print("Caught KeyboardInterrupt")
