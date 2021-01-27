@@ -17,6 +17,18 @@ def get_updates():
     data = protobuf_json.pb2json(gtfs_realtime)
     return data
 
+def get_up_obj(url=None,printout=False):
+    if url is None:
+        url = URL
+    gtfs_realtime = gtfs_realtime_pb2.FeedMessage()
+    req = urllib.request.urlopen(url)
+    data = req.read()
+    if printout:
+        print(data)
+    gtfs_realtime.ParseFromString(data)
+
+    return gtfs_realtime
+
 def check_update(up):
     mid = up["id"]
     in_id = up["vehicle"]["vehicle"]["id"]

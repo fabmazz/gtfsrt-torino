@@ -1,6 +1,8 @@
 import sys
 import time
 import datetime
+import urllib.error
+import http.client
 from pathlib import Path
 import gtt_updates
 import io_lib
@@ -31,10 +33,22 @@ class Update:
         return f"ts: {self.timest}, veh: {self.veh_num}, route: {self.route}"
 
 def get_parse_updates():
-    data = gtt_updates.get_updates()
+    gotit = False
+    while not gotit:
+        try:
+            data = gtt_updates.get_updates()
+            gotit = True
+        except urllib.error.HTTPError as e:
+            print("Got "+e.msg+" , Retrying")
+        except http.client.RemoteDisconnected as e:
+            print("Remote disconnected, Retrying")
     keys = data.keys()
     if len(keys)>2 or "header" not in keys or "entity" not in keys:
         print(keys)
+    
+    if "entity" not in keys:
+        print("NO PAYLOAD")
+        return tuple()
 
     return (Update(d) for d in data["entity"])
 
