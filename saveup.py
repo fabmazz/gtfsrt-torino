@@ -1,6 +1,7 @@
 import sys
 import time
 import datetime
+import argparse
 import urllib.error
 import http.client
 from pathlib import Path
@@ -14,6 +15,14 @@ OUT_FOLDER="data"
 TIME_SLEEP = 3
 HOUR_CUT=4
 MAX_UPDATES=200_000
+
+def create_mparser():
+
+    parser = argparse.ArgumentParser("Updater saver")
+
+    parser.add_argument("--debug", action="store_true")
+
+    return parser
 
 class Update:
     """
@@ -36,8 +45,10 @@ class Update:
     def __str__(self):
         return f"ts: {self.timest}, veh: {self.veh_num}, route: {self.route}"
 
-def get_parse_updates(session=None):
+def get_parse_updates(session=None, debug=False):
     gotit = False
+    if debug:
+        print("Session:", session)
     while not gotit:
         try:
             data = gtt_updates.get_updates(session=session)
@@ -72,14 +83,19 @@ def save_ups(fin_set, outname):
 
 def main(argv):
 
+    parser=create_mparser()
+
+    args = parser.parse_args(argv[1:])
+    debug_run = True if args.debug else False
+
     m_session = requests.Session()
     starttime = int(time.time())
     ts_cut = get_cut_date().timestamp()
     if ts_cut < starttime:
         ts_cut = get_cut_date(next_day=True).timestamp()
         print("Update changing date")
-    r = get_parse_updates()
 
+    r = get_parse_updates(m_session, debug=debug_run)
     fin_updates = set(r)
     count = 1
     outfold = Path(OUT_FOLDER)
@@ -97,7 +113,7 @@ def main(argv):
             gotnewdata = False
             while gotnewdata is False:
                 try:
-                    newdata = get_parse_updates(m_session)
+                    newdata = get_parse_updates(m_session, debug=debug_run)
                     gotnewdata = True
                 except requests.exceptions.ConnectionError:
                     print("Remake session")
