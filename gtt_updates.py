@@ -22,17 +22,25 @@ def get_updates(session=None):
     data = protobuf_json.pb2json(gtfs_realtime)
     return data
 
-def get_up_obj(url=None,printout=False):
+def get_up_obj(url=None,session=None,printout=False):
     if url is None:
         url = URL
     gtfs_realtime = gtfs_realtime_pb2.FeedMessage()
-    req = urllib.request.urlopen(url)
-    data = req.read()
-    if printout:
-        print(data)
-    gtfs_realtime.ParseFromString(data)
+    if session is not None:
+        c = session.get(url)
+    else:
+        c = requests.get(url)
+    #req = urllib.request.urlopen(URL)
+    #data = req.read()
+    gtfs_realtime.ParseFromString(c.content)
 
+    #data = protobuf_json.pb2json(gtfs_realtime)
     return gtfs_realtime
+
+def data2json(data):
+    return protobuf_json.pb2json(gtfs_realtime)
+
+
 
 def check_update(up):
     mid = up["id"]
