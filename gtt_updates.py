@@ -38,7 +38,7 @@ def get_up_obj(url=None,session=None,printout=False):
     return gtfs_realtime
 
 def data2json(data):
-    return protobuf_json.pb2json(gtfs_realtime)
+    return protobuf_json.pb2json(data)
 
 
 

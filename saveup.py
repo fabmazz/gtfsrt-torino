@@ -94,9 +94,16 @@ def main(argv):
             print(mtimestamp, "\t", len(fin_updates))
 
             time.sleep(TIME_SLEEP)
-        #n = set(get_all_updates())
+            gotnewdata = False
+            while gotnewdata is False:
+                try:
+                    newdata = get_parse_updates(m_session)
+                    gotnewdata = True
+                except requests.exceptions.ConnectionError:
+                    print("Remake session")
+                    m_session = requests.Session()
 
-            fin_updates = fin_updates.union(set(get_parse_updates(m_session)))
+            fin_updates = fin_updates.union(set(newdata))
             mtimestamp = int(time.time())
             count += 1
             save_too_many = mtimestamp > ts_cut or len(fin_updates) > MAX_UPDATES
