@@ -1,9 +1,11 @@
+from collections import namedtuple
 import sys
 import time
 import datetime
 import urllib.error
 import http.client
 from pathlib import Path
+from warnings import warn
 import requests
 import gtt_updates
 import io_lib
@@ -36,9 +38,12 @@ class Update:
     def __str__(self):
         return f"ts: {self.timest}, veh: {self.veh_num}, route: {self.route}"
 
-def get_parse_updates(session=None):
+Result = namedtuple("Result", ["data","error"])
+
+def get_parse_updates(session=None, ntries=4):
     gotit = False
-    while not gotit:
+    t=0
+    while (not gotit and t<ntries):
         try:
             data = gtt_updates.get_updates(session=session)
             gotit = True
@@ -47,15 +52,20 @@ def get_parse_updates(session=None):
         except http.client.RemoteDisconnected as e:
             print("Remote disconnected, Retrying")
 
+    if not gotit:
+        warn(f"Cannot get an update after {ntries} trials")
+        print(f"Cannot get an update after {ntries} trials")
+        return Result(tuple(),"TRIALOUT")
+
     keys = data.keys()
     if len(keys)>2 or "header" not in keys or "entity" not in keys:
         print(keys)
     
     if "entity" not in keys:
         print("NO PAYLOAD")
-        return tuple()
+        return Result(tuple(), "EMPTY")
 
-    return (Update(d) for d in data["entity"])
+    return Result((Update(d) for d in data["entity"]), None)
 
 def get_cut_date(next_day=False):
     now = datetime.datetime.now()
@@ -80,7 +90,7 @@ def main(argv):
         print("Update changing date")
     r = get_parse_updates()
 
-    fin_updates = set(r)
+    fin_updates = set(r.data)
     count = 1
     outfold = Path(OUT_FOLDER)
     if not outfold.exists():
@@ -97,13 +107,17 @@ def main(argv):
             gotnewdata = False
             while gotnewdata is False:
                 try:
-                    newdata = get_parse_updates(m_session)
-                    gotnewdata = True
-                except requests.exceptions.ConnectionError:
-                    print("Remake session")
+                    newres = get_parse_updates(m_session)
+                    if newres.error == None:
+                        gotnewdata = True
+                    elif newres.error == "TRIALOUT":
+                        print("Remake session and retry")
+                        m_session = requests.Session()
+                except (requests.exceptions.ConnectionError, requests.exceptions.RequestException):
+                    print("Error, Remake session")
                     m_session = requests.Session()
 
-            fin_updates = fin_updates.union(set(newdata))
+            fin_updates = fin_updates.union(set(newres.data))
             mtimestamp = int(time.time())
             count += 1
             save_too_many = mtimestamp > ts_cut or len(fin_updates) > MAX_UPDATES
