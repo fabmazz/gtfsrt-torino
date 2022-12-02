@@ -11,11 +11,13 @@ import gtt_updates
 import io_lib
 
 
-BASE_NAME_OUT = "updates_{}.json.gz"
+BASE_NAME_OUT = "updates_{}.json.zstd"
 OUT_FOLDER="data"
 TIME_SLEEP = 3
 HOUR_CUT=4
-MAX_UPDATES=200_000
+MAX_UPDATES=130_000
+
+HOURS_REMAKE_SESS = 0.6
 
 class Update:
     """
@@ -75,20 +77,26 @@ def get_cut_date(next_day=False):
     return defin
 
 def save_ups(fin_set, outname):
-    print("Saving..")
+    print("Saving...", end=" ")
+    t = time.time()
     gen = sorted(fin_set, key=lambda x: x.timest)
-
-    io_lib.save_json_gzip(outname, [x.data for x in gen])
+    
+    #io_lib.save_json_gzip(outname, [x.data for x in gen])
+    io_lib.save_json_zstd(outname, [x.data for x in gen])
+    tsave = time.time()-t
+    print(f"took {tsave:4.3f} s")
 
 def main(argv):
 
     m_session = requests.Session()
     starttime = int(time.time())
+    tsess = int(starttime)
     ts_cut = get_cut_date().timestamp()
     if ts_cut < starttime:
         ts_cut = get_cut_date(next_day=True).timestamp()
         print("Update changing date")
     r = get_parse_updates()
+
 
     fin_updates = set(r.data)
     count = 1
@@ -105,17 +113,28 @@ def main(argv):
 
             time.sleep(TIME_SLEEP)
             gotnewdata = False
+            last_up_t = time.time()
             while gotnewdata is False:
                 try:
                     newres = get_parse_updates(m_session)
                     if newres.error == None:
                         gotnewdata = True
+                        last_up_t = time.time()
                     elif newres.error == "TRIALOUT":
                         print("Remake session and retry")
                         m_session = requests.Session()
+                        tsess = time.time()
+                    else:
+                        if newres.error!= "EMPTY": print("ERROR: "+newres.error)
+                        else: 
+                            time.sleep(2)
+                        diff_lup=int(time.time()-last_up_t)
+                        if diff_lup > 30:
+                            print("last update: "+str(datetime.timedelta(seconds=diff_lup))+" ago")
                 except (requests.exceptions.ConnectionError, requests.exceptions.RequestException):
                     print("Error, Remake session")
                     m_session = requests.Session()
+                    tsess = time.time()
 
             fin_updates = fin_updates.union(set(newres.data))
             mtimestamp = int(time.time())
@@ -132,6 +151,10 @@ def main(argv):
                 
                 outname = outfold / Path(BASE_NAME_OUT.format(mtimestamp))
                 fin_updates = set()
+            if time.time() - tsess > HOURS_REMAKE_SESS*3600:
+                print("Remaking session")
+                m_session = requests.Session()
+                tsess = time.time()
     except KeyboardInterrupt:
         print("Caught KeyboardInterrupt")
         save_ups(fin_updates, outname)
