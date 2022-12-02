@@ -4,13 +4,12 @@ import time
 import requests
 import protobuf_json
 
-import gtfs_realtime_pb2
-
+from proto import gtfs_realtime_pb2 as gtfs_proto
 URL =  "http://percorsieorari.gtt.to.it/das_gtfsrt/vehicle_position.aspx"
 
-
+URL_ARRIVI = "http://percorsieorari.gtt.to.it/das_gtfsrt/trip_update.aspx"
 def get_updates(session=None):
-    gtfs_realtime = gtfs_realtime_pb2.FeedMessage()
+    gtfs_realtime = gtfs_proto.FeedMessage()
     if session is not None:
         c = session.get(URL)
     else:
@@ -25,7 +24,7 @@ def get_updates(session=None):
 def get_up_obj(url=None,session=None,printout=False):
     if url is None:
         url = URL
-    gtfs_realtime = gtfs_realtime_pb2.FeedMessage()
+    gtfs_realtime = gtfs_proto.FeedMessage()
     if session is not None:
         c = session.get(url)
     else:

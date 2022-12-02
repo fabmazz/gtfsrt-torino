@@ -2,6 +2,7 @@ from collections import namedtuple
 import sys
 import time
 import datetime
+import argparse
 import urllib.error
 import http.client
 from pathlib import Path
@@ -18,6 +19,14 @@ HOUR_CUT=4
 MAX_UPDATES=130_000
 
 HOURS_REMAKE_SESS = 0.6
+
+def create_mparser():
+
+    parser = argparse.ArgumentParser("Updater saver")
+
+    parser.add_argument("--debug", action="store_true")
+
+    return parser
 
 class Update:
     """
@@ -88,6 +97,11 @@ def save_ups(fin_set, outname):
 
 def main(argv):
 
+    parser=create_mparser()
+
+    args = parser.parse_args(argv[1:])
+    debug_run = True if args.debug else False
+
     m_session = requests.Session()
     starttime = int(time.time())
     tsess = int(starttime)
@@ -95,7 +109,6 @@ def main(argv):
     if ts_cut < starttime:
         ts_cut = get_cut_date(next_day=True).timestamp()
         print("Update changing date")
-    r = get_parse_updates()
 
 
     fin_updates = set(r.data)
