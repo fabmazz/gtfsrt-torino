@@ -49,6 +49,12 @@ class Update:
     def __str__(self):
         return f"ts: {self.timest}, veh: {self.veh_num}, route: {self.route}"
 
+    def get_service_day(self):
+        try:
+            return self.data["vehicle"]["trip"]["start_date"]
+        except:
+            return "00000000"
+
 Result = namedtuple("Result", ["data","error"])
 
 def get_parse_updates(session=None, ntries=4):
@@ -110,8 +116,9 @@ def main(argv):
         ts_cut = get_cut_date(next_day=True).timestamp()
         print("Update changing date")
 
+    firstres=get_parse_updates(m_session)
 
-    fin_updates = set(r.data)
+    fin_updates = set(firstres.data)
     count = 1
     outfold = Path(OUT_FOLDER)
     if not outfold.exists():
