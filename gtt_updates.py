@@ -1,3 +1,9 @@
+"""
+Copyright (C) 2022  Fabio Mazza
+This Source Code Form is subject to the terms of the Mozilla Public
+License, v. 2.0. If a copy of the MPL was not distributed with this
+file, You can obtain one at https://mozilla.org/MPL/2.0/.
+"""
 import sys
 import json
 import time
@@ -5,6 +11,7 @@ import requests
 import protobuf_json
 
 import gtfs_realtime_pb2 as gtfs_proto
+
 
 URL =  "http://percorsieorari.gtt.to.it/das_gtfsrt/vehicle_position.aspx"
 
