@@ -101,6 +101,15 @@ def save_ups(fin_set, outname):
     tsave = time.time()-t
     print(f"took {tsave:4.3f} s")
 
+def make_filename(outfold):
+    this_date = datetime.datetime.today()
+    outname = outfold / Path(BASE_NAME_OUT.format(format_date(this_date)))
+    return outname
+
+format_date = lambda date : f"{date.year}{date.month:02d}{date.day:02d}{date.hour:02d}{date.minute:02d}"
+format_date_sec = lambda date : f"{date.year}{date.month:02d}{date.day:02d}{date.hour:02d}{date.minute:02d}{date.second:02d}"
+
+
 def main(argv):
 
     parser=create_mparser()
@@ -123,13 +132,15 @@ def main(argv):
     outfold = Path(OUT_FOLDER)
     if not outfold.exists():
         outfold.mkdir(parents=True)
-     
-    outname = outfold / Path(BASE_NAME_OUT.format(starttime))
+    
+    #this_date = datetime.datetime.today()
+    FILE_SAVE = make_filename(outfold)
     mtimestamp = int(time.time())
+    mdate = datetime.datetime.today()
     try:
         while True:
         
-            print(mtimestamp, "\t", len(fin_updates))
+            print(format_date_sec(mdate), "\t", len(fin_updates))
 
             time.sleep(TIME_SLEEP)
             gotnewdata = False
@@ -158,10 +169,11 @@ def main(argv):
 
             fin_updates = fin_updates.union(set(newres.data))
             mtimestamp = int(time.time())
+            mdate = datetime.datetime.today()
             count += 1
             save_too_many = mtimestamp > ts_cut or len(fin_updates) > MAX_UPDATES
             if count % 10 == 0 or save_too_many:
-                save_ups(fin_updates, outname)
+                save_ups(fin_updates, FILE_SAVE)
             if save_too_many:
                 ### UPDATE HOUR TO SAVE
                 print("Updating saving date")
@@ -169,7 +181,7 @@ def main(argv):
                     assert get_cut_date().timestamp() < mtimestamp
                     ts_cut = get_cut_date(next_day=True).timestamp()
                 
-                outname = outfold / Path(BASE_NAME_OUT.format(mtimestamp))
+                FILE_SAVE = make_filename(outfold) #outfold / Path(BASE_NAME_OUT.format(mtimestamp))
                 fin_updates = set()
             if time.time() - tsess > HOURS_REMAKE_SESS*3600:
                 print("Remaking session")
@@ -177,7 +189,7 @@ def main(argv):
                 tsess = time.time()
     except KeyboardInterrupt:
         print("Caught KeyboardInterrupt")
-        save_ups(fin_updates, outname)
+        save_ups(fin_updates, FILE_SAVE)
     #print([hash(l) for l in v])
 if __name__ == '__main__':
     main(sys.argv)

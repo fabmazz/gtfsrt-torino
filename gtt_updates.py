@@ -4,7 +4,8 @@ import time
 import requests
 import protobuf_json
 
-from proto import gtfs_realtime_pb2 as gtfs_proto
+import gtfs_realtime_pb2 as gtfs_proto
+
 URL =  "http://percorsieorari.gtt.to.it/das_gtfsrt/vehicle_position.aspx"
 
 URL_ARRIVI = "http://percorsieorari.gtt.to.it/das_gtfsrt/trip_update.aspx"
