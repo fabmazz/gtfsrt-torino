@@ -63,10 +63,10 @@ class Update:
 
 Result = namedtuple("Result", ["data","error"])
 
-def get_parse_updates(session=None, ntries=4):
+def get_parse_updates(session=None, ntries=40):
     gotit = False
-    t=0
-    while (not gotit and t<ntries):
+    count=0
+    while (not gotit and count<ntries):
         try:
             data = gtt_updates.get_updates(session=session)
             gotit = True
@@ -74,6 +74,10 @@ def get_parse_updates(session=None, ntries=4):
             print("Got "+e.msg+" , Retrying")
         except http.client.RemoteDisconnected as e:
             print("Remote disconnected, Retrying")
+        except Exception as ex:
+            print(f"Generic error: {ex}, retrying")
+        finally:
+            count+=1
 
     if not gotit:
         warn(f"Cannot get an update after {ntries} trials")
