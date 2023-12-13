@@ -34,20 +34,32 @@ def create_mparser():
 
     return parser
 
+
 class Update:
     """
     Basic class to hold the updates data
     """
     def __init__(self, up_data):
         news = up_data["vehicle"]
+        tripdat = news["trip"]
         self.timest = news["timestamp"]
         self.veh_num = news["vehicle"]["label"]
-        self.route =  news["trip"]["route_id"]
+        self.route =  tripdat["route_id"]
+        self.trip_id = tripdat["trip_id"]
+        #self.start_date 
 
-        self.data = up_data
+        self.data = {
+            "timestamp": self.timest,
+            "veh": self.veh_num
+        }
+        for k in tripdat:
+            self.data[k] = tripdat[k]
+        for k in news["position"]:
+            self.data[k] = news["position"][k]
+
 
     def __hash__(self):
-        return hash((self.timest, self.veh_num, self.route))
+        return hash((self.timest, self.veh_num, self.route, self.trip_id))
     
     def __eq__(self, other):
         return self.timest == other.timest and self.veh_num == other.veh_num and self.route == other.route
@@ -57,8 +69,9 @@ class Update:
 
     def get_service_day(self):
         try:
-            return self.data["vehicle"]["trip"]["start_date"]
+            return self.data["start_date"]
         except:
+            print("Update has no start_date")
             return "00000000"
 
 Result = namedtuple("Result", ["data","error"])
@@ -101,13 +114,18 @@ def get_cut_date(next_day=False):
     defin = datetime.datetime(now.year, now.month, now.day , HOUR_CUT)
     return defin
 
-def save_ups(fin_set, outname):
+def process_updates(ups_set):
+    gen = sorted(ups_set, key=lambda x: x.timest)
+    return  [x.data for x in gen]
+
+def save_ups_json(increm_list, outname):
     print("Saving...", end=" ")
     t = time.time()
-    gen = sorted(fin_set, key=lambda x: x.timest)
+    #gen = sorted(fin_set, key=lambda x: x.timest)
     
     #io_lib.save_json_gzip(outname, [x.data for x in gen])
-    io_lib.save_json_zstd(outname, [x.data for x in gen])
+    io_lib.save_json_zstd(outname, increm_list)
+    #[x.data for x in gen])
     tsave = time.time()-t
     print(f"took {tsave:4.3f} s")
 
@@ -138,6 +156,7 @@ def main(argv):
     firstres=get_parse_updates(m_session)
 
     fin_updates = set(firstres.data)
+    UPDATES_OUT = process_updates(fin_updates)
     count = 1
     outfold = Path(OUT_FOLDER)
     if not outfold.exists():
@@ -176,14 +195,17 @@ def main(argv):
                     print("Error, Remake session")
                     m_session = requests.Session()
                     tsess = time.time()
-
-            fin_updates = fin_updates.union(set(newres.data))
+            ## find ones that have to be added
+            ups_add = set(newres.data).difference(fin_updates)
+            fin_updates = fin_updates.union(ups_add)
+            ## add missing to list
+            UPDATES_OUT.extend(process_updates(ups_add))
             mtimestamp = int(time.time())
             mdate = datetime.datetime.today()
             count += 1
             save_too_many = mtimestamp > ts_cut or len(fin_updates) > MAX_UPDATES
             if count % 10 == 0 or save_too_many:
-                save_ups(fin_updates, FILE_SAVE)
+                save_ups_json(UPDATES_OUT, FILE_SAVE)
             if save_too_many:
                 ### UPDATE HOUR TO SAVE
                 print("Updating saving date")
@@ -193,13 +215,14 @@ def main(argv):
                 
                 FILE_SAVE = make_filename(outfold) #outfold / Path(BASE_NAME_OUT.format(mtimestamp))
                 fin_updates = set()
+                UPDATES_OUT = []
             if time.time() - tsess > HOURS_REMAKE_SESS*3600:
                 print("Remaking session")
                 m_session = requests.Session()
                 tsess = time.time()
     except KeyboardInterrupt:
         print("Caught KeyboardInterrupt")
-        save_ups(fin_updates, FILE_SAVE)
+        save_ups_json(UPDATES_OUT, FILE_SAVE)
     #print([hash(l) for l in v])
 if __name__ == '__main__':
     main(sys.argv)
