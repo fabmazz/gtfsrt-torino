@@ -6,15 +6,15 @@ file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """
 import json
 import gzip
-
 import io
+import zstandard
+
 
 def save_json_gzip(fpath, obj):
     with gzip.open(fpath, "wt") as f:
         json.dump(obj, f, indent=2)
 
 def save_json_zstd(fpath, obj, level=10):
-    import zstandard
     cctx = zstandard.ZstdCompressor(threads=-1,level=level)
     with open(fpath, "wb") as f:
         with cctx.stream_writer(f) as compressor:
@@ -22,3 +22,10 @@ def save_json_zstd(fpath, obj, level=10):
             json.dump(obj, wr)
             wr.flush()
             wr.close()
+
+def read_json_zstd(f):
+    decomp = zstandard.ZstdDecompressor()
+    with open(f,mode="rb") as f:
+        with decomp.stream_reader(f) as st:
+            dat=json.load(st)
+    return dat
