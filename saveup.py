@@ -38,6 +38,7 @@ def create_mparser():
     parser = argparse.ArgumentParser("Updater saver")
 
     parser.add_argument("--debug", action="store_true")
+    parser.add_argument("--no-data", action="store_true",dest="no_data")
 
     return parser
 
@@ -220,6 +221,9 @@ def main(argv):
 
     args = parser.parse_args(argv[1:])
     debug_run = True if args.debug else False
+    no_data = args.no_data
+    if no_data:
+        print("Will not download additional data on trips")
 
     m_session = requests.Session()
     starttime = int(time.time())
@@ -300,10 +304,11 @@ def main(argv):
             ## add missing to list
             UPDATES_OUT.extend(process_updates(ups_add))
             ### add updates tripId
-            for up in ups_add:
-                TRIPS_FUT.append(
-                    executor.submit(download_tripinfo, up.trip_id)
-                )
+            if not no_data:
+                for up in ups_add:
+                    TRIPS_FUT.append(
+                        executor.submit(download_tripinfo, up.trip_id)
+                    )
 
             mtimestamp = int(time.time())
             mdate = datetime.datetime.today()
