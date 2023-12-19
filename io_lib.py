@@ -29,3 +29,7 @@ def read_json_zstd(f):
         with decomp.stream_reader(f) as st:
             dat=json.load(st)
     return dat
+
+def format_date_twodays(date):
+    day_p = date.day if date.day % 2 == 1 else date.day-1
+    return f"{date.year}{date.month:02d}{day_p:02d}"

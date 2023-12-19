@@ -16,7 +16,7 @@ from warnings import warn
 import requests
 import gtt_updates
 import io_lib
-
+import matolib
 
 BASE_NAME_OUT = "updates_{}.json.zstd"
 OUT_FOLDER="data"
@@ -26,6 +26,13 @@ MAX_UPDATES=130_000
 
 HOURS_REMAKE_SESS = 0.6
 
+from concurrent.futures import ThreadPoolExecutor, wait
+
+executor = ThreadPoolExecutor(3)
+
+PATTERNS_FUT = []
+TRIPS_FUT = []
+N_TRIPS_SAVED = 0
 def create_mparser():
 
     parser = argparse.ArgumentParser("Updater saver")
@@ -33,6 +40,77 @@ def create_mparser():
     parser.add_argument("--debug", action="store_true")
 
     return parser
+
+def download_patternInfo(patterncode):
+    global PATTERNS_DOWN
+    try:
+        pattern = matolib.get_pattern_info(patterncode)
+
+        code = pattern["code"]
+        PATTERNS_DOWN[code] = pattern
+    except Exception as e:
+        print(f"Cannot download pattern {patterncode}, ex: {e}", file=sys.stderr)
+
+def download_tripinfo(gtfsname):
+    global DOWNLOADED_TRIPS, TRIPS_DOWN, PATTERNS_DOWN
+    
+    gtfsid=f"gtt:{gtfsname}"
+    if gtfsid=="gtt:NoneU":
+        # in some cases the trip is a text 'None'
+        return
+    if gtfsid in DOWNLOADED_TRIPS:
+        ## already downloaded
+        return
+    try:
+        trip_d = matolib.get_trip_info(gtfsid)
+
+        tripelm = dict(gtfsId=trip_d["gtfsId"], serviceId=trip_d["serviceId"], headsign=trip_d["tripHeadsign"],
+                               routeId=trip_d["route"]["gtfsId"], patternCode=trip_d["pattern"]["code"])
+        
+        TRIPS_DOWN.append(tripelm)
+        DOWNLOADED_TRIPS.add(gtfsid)
+
+        patCode = tripelm["patternCode"]
+        if(patCode not in PATTERNS_DOWN):
+            PATTERNS_FUT.append(
+                executor.submit(download_patternInfo, patCode)
+            )
+    except Exception as e:
+        ### nothing work
+        #print(f"Download info for trip {gtfsid},  gtfsid: {gtfsid}"")
+        print(f"Failed to download data for trip {gtfsid}, error: {e}",file=sys.stderr)
+
+def save_patterns_done(patterns_file):
+    global PATTERNS_FUT, PATTERNS_DOWN
+    res = wait(PATTERNS_FUT)
+    PATTERNS_FUT = list(filter(lambda x: not x.done(),PATTERNS_FUT))
+    t = time.time()
+    io_lib.save_json_zstd(patterns_file,PATTERNS_DOWN)
+    print(f"Saved the patterns in {time.time()-t:.3f} s")
+
+def save_trips_need(trips_file):
+    global TRIPS_FUT, TRIPS_DOWN, N_TRIPS_SAVED
+    res = wait(TRIPS_FUT)
+    TRIPS_FUT = list(filter(lambda x: not x.done(),TRIPS_FUT))
+    if len(TRIPS_DOWN) > N_TRIPS_SAVED:
+        ## save patterns
+        t = time.time()
+        io_lib.save_json_zstd(trips_file,TRIPS_DOWN)
+        print(f"Saved the trips in {time.time()-t:.3f} s")
+        N_TRIPS_SAVED = len(TRIPS_DOWN)
+
+
+format_date = lambda date : f"{date.year}{date.month:02d}{date.day:02d}{date.hour:02d}{date.minute:02d}"
+format_date_day =  lambda date : f"{date.year}{date.month:02d}{date.day:02d}"
+format_date_halfmonth =  lambda date : f"{date.year}{date.month:02d}00" if date.day < 15 else f"{date.year}{date.month:02d}15"
+format_date_sec = lambda date : f"{date.year}{date.month:02d}{date.day:02d}{date.hour:02d}{date.minute:02d}{date.second:02d}"
+
+
+get_pattern_fname = lambda outfold: outfold/f"patterns_{format_date_halfmonth(datetime.datetime.now())}.json.zstd"
+get_trips_mapname = lambda outfold: outfold/f"trips_{io_lib.format_date_twodays(datetime.datetime.now())}.json.zstd"
+
+#def get_string_name_day()
+
 
 
 class Update:
@@ -134,11 +212,9 @@ def make_filename(outfold):
     outname = outfold / Path(BASE_NAME_OUT.format(format_date(this_date)))
     return outname
 
-format_date = lambda date : f"{date.year}{date.month:02d}{date.day:02d}{date.hour:02d}{date.minute:02d}"
-format_date_sec = lambda date : f"{date.year}{date.month:02d}{date.day:02d}{date.hour:02d}{date.minute:02d}{date.second:02d}"
-
 
 def main(argv):
+    global PATTERNS_DOWN, DOWNLOADED_TRIPS, TRIPS_DOWN
 
     parser=create_mparser()
 
@@ -152,13 +228,33 @@ def main(argv):
     if ts_cut < starttime:
         ts_cut = get_cut_date(next_day=True).timestamp()
         print("Update changing date")
+    outfold = Path(OUT_FOLDER)
+        
+    PATTERNS_FNAME = get_pattern_fname(outfold)
+    TRIPS_FNAME = get_trips_mapname(outfold)
+
+    if(PATTERNS_FNAME.exists()):
+        PATTERNS_DOWN = io_lib.read_json_zstd(PATTERNS_FNAME)
+    else:
+        print("No patterns file")
+        PATTERNS_DOWN = {}
+
+    if(TRIPS_FNAME.exists()):
+        TRIPS_DOWN = io_lib.read_json_zstd(TRIPS_FNAME)
+        DOWNLOADED_TRIPS = set(t["gtfsId"] for t in TRIPS_DOWN)
+        print(f"Loaded {len(DOWNLOADED_TRIPS)} trips")
+
+    else:
+        print("No trips file")
+        TRIPS_DOWN = []
+        DOWNLOADED_TRIPS = set()
 
     firstres=get_parse_updates(m_session)
 
     fin_updates = set(firstres.data)
     UPDATES_OUT = process_updates(fin_updates)
     count = 1
-    outfold = Path(OUT_FOLDER)
+    
     if not outfold.exists():
         outfold.mkdir(parents=True)
     
@@ -166,10 +262,13 @@ def main(argv):
     FILE_SAVE = make_filename(outfold)
     mtimestamp = int(time.time())
     mdate = datetime.datetime.today()
+
+        
+    ### begin
     try:
         while True:
         
-            print(format_date_sec(mdate), "\t", len(fin_updates))
+            print(format_date_sec(mdate), "\t", f"{len(fin_updates)}, tr:{len(TRIPS_DOWN)}, pat:{len(PATTERNS_DOWN)}")
 
             time.sleep(TIME_SLEEP)
             gotnewdata = False
@@ -200,12 +299,33 @@ def main(argv):
             fin_updates = fin_updates.union(ups_add)
             ## add missing to list
             UPDATES_OUT.extend(process_updates(ups_add))
+            ### add updates tripId
+            for up in ups_add:
+                TRIPS_FUT.append(
+                    executor.submit(download_tripinfo, up.trip_id)
+                )
+
             mtimestamp = int(time.time())
             mdate = datetime.datetime.today()
             count += 1
             save_too_many = mtimestamp > ts_cut or len(fin_updates) > MAX_UPDATES
             if count % 10 == 0 or save_too_many:
                 save_ups_json(UPDATES_OUT, FILE_SAVE)
+            if count % 15 == 0:
+                executor.submit(save_patterns_done, PATTERNS_FNAME)
+                executor.submit(save_trips_need, TRIPS_FNAME)
+                if get_pattern_fname(outfold) != PATTERNS_FNAME:
+                    ## update patterns name
+                    print("Changing patterns file")
+                    PATTERNS_FNAME = get_pattern_fname(outfold)
+                    PATTERNS_DOWN = {}
+                if get_trips_mapname(outfold) != TRIPS_FNAME:
+                    ## update patterns name
+                    print("Changing trips file")
+                    TRIPS_FNAME = get_trips_mapname(outfold)
+                    TRIPS_DOWN = []
+                    DOWNLOADED_TRIPS = set()
+
             if save_too_many:
                 ### UPDATE HOUR TO SAVE
                 print("Updating saving date")
@@ -223,6 +343,8 @@ def main(argv):
     except KeyboardInterrupt:
         print("Caught KeyboardInterrupt")
         save_ups_json(UPDATES_OUT, FILE_SAVE)
+        save_trips_need(TRIPS_FNAME)
+        save_patterns_done(PATTERNS_FNAME)
     #print([hash(l) for l in v])
 if __name__ == '__main__':
     main(sys.argv)
