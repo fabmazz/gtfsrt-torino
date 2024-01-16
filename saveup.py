@@ -21,7 +21,7 @@ import matolib
 BASE_NAME_OUT = "updates_{}.json.zstd"
 OUT_FOLDER="data"
 TIME_SLEEP = 3
-HOUR_CUT=4
+HOUR_CUT=(3,45)
 MAX_UPDATES=130_000
 
 HOURS_REMAKE_SESS = 0.6
@@ -190,7 +190,7 @@ def get_cut_date(next_day=False):
     now = datetime.datetime.now()
     if next_day:
         now += datetime.timedelta(days=1.)
-    defin = datetime.datetime(now.year, now.month, now.day , HOUR_CUT)
+    defin = datetime.datetime(now.year, now.month, now.day , *HOUR_CUT)
     return defin
 
 def process_updates(ups_set):
@@ -230,8 +230,9 @@ def main(argv):
     tsess = int(starttime)
     ts_cut = get_cut_date().timestamp()
     if ts_cut < starttime:
-        ts_cut = get_cut_date(next_day=True).timestamp()
-        print("Update changing date")
+        date_next = get_cut_date(next_day=True)
+        print("Updating saving date to", date_next)
+        ts_cut = date_next.timestamp()
     outfold = Path(OUT_FOLDER)
         
     PATTERNS_FNAME = get_pattern_fname(outfold)
@@ -313,8 +314,9 @@ def main(argv):
             mtimestamp = int(time.time())
             mdate = datetime.datetime.today()
             count += 1
-            save_too_many = mtimestamp > ts_cut or len(fin_updates) > MAX_UPDATES
-            if count % 10 == 0 or save_too_many:
+            rotate_file_save = mtimestamp > ts_cut or len(fin_updates) > MAX_UPDATES
+            if count % 10 == 0 or rotate_file_save:
+                ## save the updates
                 save_ups_json(UPDATES_OUT, FILE_SAVE)
             if count % 15 == 0:
                 executor.submit(save_patterns_done, PATTERNS_FNAME)
@@ -331,12 +333,13 @@ def main(argv):
                     TRIPS_DOWN = []
                     DOWNLOADED_TRIPS = set()
 
-            if save_too_many:
+            if rotate_file_save:
                 ### UPDATE HOUR TO SAVE
-                print("Updating saving date")
                 if mtimestamp > ts_cut:
                     assert get_cut_date().timestamp() < mtimestamp
-                    ts_cut = get_cut_date(next_day=True).timestamp()
+                    date_next = get_cut_date(next_day=True)
+                    print("Updating saving date to", date_next)
+                    ts_cut = date_next.timestamp()
                 
                 FILE_SAVE = make_filename(outfold) #outfold / Path(BASE_NAME_OUT.format(mtimestamp))
                 fin_updates = set()
