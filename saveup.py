@@ -15,10 +15,10 @@ from pathlib import Path
 from warnings import warn
 import requests
 import gtt_updates
-import io_lib
+import io_lib, iomsg
 import matolib
 
-BASE_NAME_OUT = "updates_{}.json.zstd"
+BASE_NAME_OUT = "updates_{}.msgpack.zstd"
 OUT_FOLDER="data"
 TIME_SLEEP = 3
 HOUR_CUT=(3,45)
@@ -86,7 +86,7 @@ def save_patterns_done(patterns_file):
     res = wait(PATTERNS_FUT)
     PATTERNS_FUT = list(filter(lambda x: not x.done(),PATTERNS_FUT))
     t = time.time()
-    io_lib.save_json_zstd(patterns_file,PATTERNS_DOWN)
+    io_lib.save_json_zstd(patterns_file,PATTERNS_DOWN, level=5)
     print(f"Saved the patterns in {time.time()-t:.3f} s")
 
 def save_trips_need(trips_file):
@@ -96,7 +96,7 @@ def save_trips_need(trips_file):
     if len(TRIPS_DOWN) > N_TRIPS_SAVED:
         ## save patterns
         t = time.time()
-        io_lib.save_json_zstd(trips_file,TRIPS_DOWN)
+        io_lib.save_json_zstd(trips_file,TRIPS_DOWN, level=6)
         print(f"Saved the trips in {time.time()-t:.3f} s")
         N_TRIPS_SAVED = len(TRIPS_DOWN)
 
@@ -197,13 +197,14 @@ def process_updates(ups_set):
     gen = sorted(ups_set, key=lambda x: x.timest)
     return  [x.data for x in gen]
 
-def save_ups_json(increm_list, outname):
+def save_updates_file(increm_list, outname):
     print("Saving...", end=" ")
     t = time.time()
     #gen = sorted(fin_set, key=lambda x: x.timest)
     
     #io_lib.save_json_gzip(outname, [x.data for x in gen])
-    io_lib.save_json_zstd(outname, increm_list)
+    #io_lib.save_json_zstd(outname, increm_list)
+    iomsg.save_msgpack_zstd(outname, increm_list, level=5)
     #[x.data for x in gen])
     tsave = time.time()-t
     print(f"took {tsave:4.3f} s")
@@ -317,10 +318,12 @@ def main(argv):
             rotate_file_save = mtimestamp > ts_cut or len(fin_updates) > MAX_UPDATES
             if count % 10 == 0 or rotate_file_save:
                 ## save the updates
-                save_ups_json(UPDATES_OUT, FILE_SAVE)
+                save_updates_file(UPDATES_OUT, FILE_SAVE)
             if count % 15 == 0:
-                executor.submit(save_patterns_done, PATTERNS_FNAME)
-                executor.submit(save_trips_need, TRIPS_FNAME)
+                #executor.submit(save_patterns_done, PATTERNS_FNAME)
+                save_patterns_done(PATTERNS_FNAME)
+                save_trips_need(TRIPS_FNAME)
+                #executor.submit(save_trips_need, TRIPS_FNAME)
                 if get_pattern_fname(outfold) != PATTERNS_FNAME:
                     ## update patterns name
                     print("Changing patterns file")
@@ -350,7 +353,7 @@ def main(argv):
                 tsess = time.time()
     except KeyboardInterrupt:
         print("Caught KeyboardInterrupt")
-        save_ups_json(UPDATES_OUT, FILE_SAVE)
+        save_updates_file(UPDATES_OUT, FILE_SAVE)
         save_trips_need(TRIPS_FNAME)
         save_patterns_done(PATTERNS_FNAME)
     #print([hash(l) for l in v])
