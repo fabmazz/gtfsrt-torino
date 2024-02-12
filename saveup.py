@@ -9,6 +9,7 @@ import sys
 import time
 import datetime
 import argparse
+from threading import Lock
 import urllib.error
 import http.client
 from pathlib import Path
@@ -32,6 +33,8 @@ executor = ThreadPoolExecutor(3)
 
 PATTERNS_FUT = []
 TRIPS_FUT = []
+PATTERNS_LOCK = Lock()
+TRIPS_LOCK = Lock()
 N_TRIPS_SAVED = 0
 def create_mparser():
 
@@ -48,7 +51,10 @@ def download_patternInfo(patterncode):
         pattern = matolib.get_pattern_info(patterncode)
 
         code = pattern["code"]
-        PATTERNS_DOWN[code] = pattern
+        with PATTERNS_LOCK:
+            ## use lock
+            PATTERNS_DOWN[code] = pattern
+        
     except Exception as e:
         print(f"Cannot download pattern {patterncode}, ex: {e}", file=sys.stderr)
 
@@ -67,9 +73,9 @@ def download_tripinfo(gtfsname):
 
         tripelm = dict(gtfsId=trip_d["gtfsId"], serviceId=trip_d["serviceId"], headsign=trip_d["tripHeadsign"],
                                routeId=trip_d["route"]["gtfsId"], patternCode=trip_d["pattern"]["code"])
-        
-        TRIPS_DOWN.append(tripelm)
-        DOWNLOADED_TRIPS.add(gtfsid)
+        with TRIPS_LOCK:
+            TRIPS_DOWN.append(tripelm)
+            DOWNLOADED_TRIPS.add(gtfsid)
 
         patCode = tripelm["patternCode"]
         if(patCode not in PATTERNS_DOWN):
@@ -84,21 +90,23 @@ def download_tripinfo(gtfsname):
 def save_patterns_done(patterns_file):
     global PATTERNS_FUT, PATTERNS_DOWN
     res = wait(PATTERNS_FUT)
-    PATTERNS_FUT = list(filter(lambda x: not x.done(),PATTERNS_FUT))
-    t = time.time()
-    io_lib.save_json_zstd(patterns_file,PATTERNS_DOWN, level=5)
-    print(f"Saved the patterns in {time.time()-t:.3f} s")
+    with PATTERNS_LOCK:
+        PATTERNS_FUT = list(filter(lambda x: not x.done(),PATTERNS_FUT))
+        t = time.time()
+        io_lib.save_json_zstd(patterns_file,PATTERNS_DOWN, level=5)
+        print(f"Saved the patterns in {time.time()-t:.3f} s")
 
 def save_trips_need(trips_file):
     global TRIPS_FUT, TRIPS_DOWN, N_TRIPS_SAVED
     res = wait(TRIPS_FUT)
-    TRIPS_FUT = list(filter(lambda x: not x.done(),TRIPS_FUT))
-    if len(TRIPS_DOWN) > N_TRIPS_SAVED:
-        ## save patterns
-        t = time.time()
-        io_lib.save_json_zstd(trips_file,TRIPS_DOWN, level=6)
-        print(f"Saved the trips in {time.time()-t:.3f} s")
-        N_TRIPS_SAVED = len(TRIPS_DOWN)
+    with TRIPS_LOCK:
+        TRIPS_FUT = list(filter(lambda x: not x.done(),TRIPS_FUT))
+        if len(TRIPS_DOWN) > N_TRIPS_SAVED:
+            ## save patterns
+            t = time.time()
+            io_lib.save_json_zstd(trips_file,TRIPS_DOWN, level=6)
+            print(f"Saved the trips in {time.time()-t:.3f} s")
+            N_TRIPS_SAVED = len(TRIPS_DOWN)
 
 
 format_date = lambda date : f"{date.year}{date.month:02d}{date.day:02d}{date.hour:02d}{date.minute:02d}"
@@ -320,10 +328,10 @@ def main(argv):
                 ## save the updates
                 save_updates_file(UPDATES_OUT, FILE_SAVE)
             if count % 15 == 0:
-                #executor.submit(save_patterns_done, PATTERNS_FNAME)
-                save_patterns_done(PATTERNS_FNAME)
-                save_trips_need(TRIPS_FNAME)
-                #executor.submit(save_trips_need, TRIPS_FNAME)
+                executor.submit(save_patterns_done, PATTERNS_FNAME)
+                #save_patterns_done(PATTERNS_FNAME)
+                #save_trips_need(TRIPS_FNAME)
+                executor.submit(save_trips_need, TRIPS_FNAME)
                 if get_pattern_fname(outfold) != PATTERNS_FNAME:
                     ## update patterns name
                     print("Changing patterns file")
