@@ -36,6 +36,8 @@ TRIPS_FUT = []
 PATTERNS_LOCK = Lock()
 TRIPS_LOCK = Lock()
 N_TRIPS_SAVED = 0
+
+
 def create_mparser():
 
     parser = argparse.ArgumentParser("Updater saver")
@@ -49,14 +51,35 @@ def download_patternInfo(patterncode):
     global PATTERNS_DOWN
     try:
         pattern = matolib.get_pattern_info(patterncode)
-
+        pattern["timestamp"] = int(time.time())
         code = pattern["code"]
-        with PATTERNS_LOCK:
+        with PATTERNS_LOCK: 
             ## use lock
-            PATTERNS_DOWN[code] = pattern
+            if code not in PATTERNS_DOWN:
+                PATTERNS_DOWN[code] = [pattern]
+            else:
+                found = False
+                #h1 = hash(pattern["stops"])
+                for p in PATTERNS_DOWN[code]:
+                    if p["patternGeometry"]["points"] == pattern["patternGeometry"]["points"]:
+                        found = True
+                        p["timestamp"] = pattern["timestamp"]
+                        break
+                if not found:
+                    print(f"Current pattern {code} not found, appending")
+                    PATTERNS_DOWN[code].append(pattern)
+
+            #PATTERNS_DOWN[code] = pattern
         
     except Exception as e:
         print(f"Cannot download pattern {patterncode}, ex: {e}", file=sys.stderr)
+
+def last_pattern_timestamp(patts):
+    t=-3
+    for p in patts:
+        if p["timestamp"] > t:
+            t = p["timestamp"]
+    return t
 
 def download_tripinfo(gtfsname, lineid):
     global DOWNLOADED_TRIPS, TRIPS_DOWN, PATTERNS_DOWN
@@ -73,16 +96,20 @@ def download_tripinfo(gtfsname, lineid):
 
         tripelm = dict(gtfsId=trip_d["gtfsId"], serviceId=trip_d["serviceId"], headsign=trip_d["tripHeadsign"],
                                routeId=trip_d["route"]["gtfsId"], patternCode=trip_d["pattern"]["code"])
-        print(f"Download trip {gtfsid} info, route {lineid}")
+        #print(f"Download trip {gtfsid} info, route {lineid}")
         with TRIPS_LOCK:
             TRIPS_DOWN.append(tripelm)
             DOWNLOADED_TRIPS.add(gtfsid)
 
         patCode = tripelm["patternCode"]
-        if(patCode not in PATTERNS_DOWN):
-            PATTERNS_FUT.append(
-                executor.submit(download_patternInfo, patCode)
-            )
+        ts = int(time.time())
+        with PATTERNS_LOCK:
+            if(patCode not in PATTERNS_DOWN) or (
+                last_pattern_timestamp(PATTERNS_DOWN[patCode])-ts > (2)*3600): ## 8 hours have already passed
+                PATTERNS_FUT.append(
+                    executor.submit(download_patternInfo, patCode)
+                )
+
     except Exception as e:
         ### nothing work
         #print(f"Download info for trip {gtfsid},  gtfsid: {gtfsid}"")
