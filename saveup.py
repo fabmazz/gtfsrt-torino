@@ -58,7 +58,7 @@ def download_patternInfo(patterncode):
     except Exception as e:
         print(f"Cannot download pattern {patterncode}, ex: {e}", file=sys.stderr)
 
-def download_tripinfo(gtfsname):
+def download_tripinfo(gtfsname, lineid):
     global DOWNLOADED_TRIPS, TRIPS_DOWN, PATTERNS_DOWN
     
     gtfsid=f"gtt:{gtfsname}"
@@ -73,7 +73,7 @@ def download_tripinfo(gtfsname):
 
         tripelm = dict(gtfsId=trip_d["gtfsId"], serviceId=trip_d["serviceId"], headsign=trip_d["tripHeadsign"],
                                routeId=trip_d["route"]["gtfsId"], patternCode=trip_d["pattern"]["code"])
-        print(f"Download trip {gtfsid} info")
+        print(f"Download trip {gtfsid} info, route {lineid}")
         with TRIPS_LOCK:
             TRIPS_DOWN.append(tripelm)
             DOWNLOADED_TRIPS.add(gtfsid)
@@ -86,7 +86,7 @@ def download_tripinfo(gtfsname):
     except Exception as e:
         ### nothing work
         #print(f"Download info for trip {gtfsid},  gtfsid: {gtfsid}"")
-        print(f"Failed to download data for trip {gtfsid}, error: {e}",file=sys.stderr)
+        print(f"Failed to download data for trip {gtfsid}, route {lineid} error: {e}",file=sys.stderr)
 
 def save_patterns_done(patterns_file):
     global PATTERNS_FUT, PATTERNS_DOWN
@@ -318,7 +318,7 @@ def main(argv):
             if not no_data:
                 for up in ups_add:
                     TRIPS_FUT.append(
-                        executor.submit(download_tripinfo, up.trip_id)
+                        executor.submit(download_tripinfo, up.trip_id, up.route)
                     )
 
             mtimestamp = int(time.time())
