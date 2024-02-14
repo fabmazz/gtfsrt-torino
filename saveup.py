@@ -73,6 +73,7 @@ def download_tripinfo(gtfsname):
 
         tripelm = dict(gtfsId=trip_d["gtfsId"], serviceId=trip_d["serviceId"], headsign=trip_d["tripHeadsign"],
                                routeId=trip_d["route"]["gtfsId"], patternCode=trip_d["pattern"]["code"])
+        print(f"Download trip {gtfsid} info")
         with TRIPS_LOCK:
             TRIPS_DOWN.append(tripelm)
             DOWNLOADED_TRIPS.add(gtfsid)
