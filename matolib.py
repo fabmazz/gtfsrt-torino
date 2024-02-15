@@ -45,12 +45,36 @@ query_trip2="""query TripInfo($tripid: String!){
 }
 """
 
+query_alltrips="""query AllTrips($feeds: [String]){
+    trips(feeds: $feeds){
+        gtfsId
+        serviceId
+        route{
+            gtfsId
+        }
+        pattern{
+            code
+        }
+        tripHeadsign
+
+    }
+}
+"""
+
 def get_trip_info(gtfs_tripid, session = None): 
     #"gtt:23673879U"
     r = make_request("TripInfo",dict(tripid=gtfs_tripid), query=query_trip2, session=session)
     data = r.json()
     trip = data["data"]["trip"]
     return trip
+
+def get_all_trips(feed, session = None): 
+    #"gtt:23673879U"
+    r = make_request("AllTrips",dict(feeds=feed), query=query_alltrips, session=session)
+    data = r.json()
+    trip = data["data"]["trips"]
+    return trip
+
 
 query_pat="""
     query PatternInfo($field: String!){
@@ -78,3 +102,34 @@ def get_pattern_info(patternCode, session=None):
     data = r.json()
     #
     return data["data"]["pattern"]
+
+query_routes_pat="""
+query RoutesWithPatterns($routes: [String]) {
+  routes(ids: $routes) {
+    gtfsId
+    patterns{
+      name
+      code
+      semanticHash
+      directionId
+      headsign
+      stops{
+        gtfsId
+        lat
+        lon
+      }
+      patternGeometry{
+        length
+        points
+      }
+      
+    }
+  }
+}
+"""
+def get_routes_patterns(routes, session=None): 
+    #"gtt:23673879U"
+    r = make_request("RoutesWithPatterns", dict(routes=routes), query=query_routes_pat, session=session)
+    data = r.json()
+    #
+    return data["data"]["routes"]
